@@ -1,0 +1,18 @@
+{
+  "name": "YourBuddy",
+  "short_name": "YourBuddy",
+  "description": "Capture whatever's in your head — without forcing everything to live under a date.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#faf8f5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

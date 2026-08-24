@@ -1,0 +1,199 @@
+// YourBuddy — v1 schema
+//
+// Design notes that trace back to IDEA.md:
+//  * Every table carries a user identity even though v1 is single-user (§3).
+//  * Entries have TWO dates: `createdAt` (when you wrote it) and `entryDate`
+//    (what day it is *about*). They are not interchangeable — the dated shelf
+//    orders by entryDate, the sort control sorts by createdAt (§7).
+//  * `entryDate == null` IS the undated shelf. Making it a real NULL means the
+//    database enforces the split instead of every query remembering a flag.
+//  * `priorEntryDate` remembers the date that was removed, so the remove-date
+//    gesture is losslessly reversible (§5).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// Identity
+// ============================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  entries     Entry[]
+  trackers    Tracker[]
+  attachments Attachment[]
+  reminders   Reminder[]
+}
+
+// ============================================================
+// Entries
+// ============================================================
+
+enum EntryKind {
+  JOURNAL
+  THOUGHT
+}
+
+model Entry {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind  EntryKind @default(JOURNAL)
+  title String?
+  // Always text. Voice transcripts are appended here so that *everything*
+  // exists as text and is reachable by search (§4).
+  body  String    @default("")
+
+  // When it was written. Never changes.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // What day it is about. NULL => undated shelf.
+  entryDate      DateTime? @db.Date
+  // The date it had before it was removed, so the gesture is reversible.
+  priorEntryDate DateTime? @db.Date
+
+  attachments Attachment[]
+  reminder    Reminder?
+
+  @@index([userId, entryDate])
+  @@index([userId, createdAt])
+}
+
+// ============================================================
+// Attachments (images + voice notes)
+// ============================================================
+
+enum AttachmentKind {
+  IMAGE
+  AUDIO
+}
+
+enum TranscriptStatus {
+  NOT_APPLICABLE // images
+  PENDING // audio saved, no transcription provider configured yet
+  DONE
+  FAILED
+}
+
+model Attachment {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind       AttachmentKind
+  // Opaque key resolved by the storage adapter (local disk in v1).
+  storageKey String
+  mimeType   String
+  sizeBytes  Int
+  // Original client filename, for display only.
+  fileName   String?
+  // Audio only.
+  durationSeconds Int?
+
+  transcriptStatus TranscriptStatus @default(NOT_APPLICABLE)
+  transcript       String?
+  transcriptError  String?
+
+  entryId String?
+  entry   Entry?  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  trackerLogId String?
+  trackerLog   TrackerLog? @relation(fields: [trackerLogId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([entryId])
+  @@index([trackerLogId])
+  @@index([userId, transcriptStatus])
+}
+
+// ============================================================
+// Reminders — opt-in, in-app only, resolved on load (§7)
+// ============================================================
+
+model Reminder {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  entryId String @unique
+  entry   Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  remindAt    DateTime
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, remindAt])
+}
+
+// ============================================================
+// Trackers
+// ============================================================
+
+enum TrackerCadence {
+  DAILY
+  OCCASIONAL
+}
+
+enum TrackerLogType {
+  BINARY
+  NUMBER
+  TEXT
+}
+
+model Tracker {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name    String
+  cadence TrackerCadence @default(DAILY)
+  logType TrackerLogType
+  // Required for NUMBER trackers — "80" is meaningless without it (§4).
+  unit    String?
+
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  logs TrackerLog[]
+
+  @@index([userId, archivedAt])
+}
+
+model TrackerLog {
+  id     String @id @default(cuid())
+  userId String
+
+  trackerId String
+  tracker   Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+
+  // The day this check-in counts for (backdatable).
+  logDate DateTime @db.Date
+
+  // Exactly one of these is set, per the parent tracker's logType.
+  boolValue Boolean?
+  numValue  Float?
+  textValue String?
+
+  // The optional note is the raw material for effort-vs-outcome analysis (§4).
+  note String?
+
+  createdAt DateTime @default(now())
+
+  attachments Attachment[]
+
+  @@index([trackerId, logDate])
+  @@index([userId, logDate])
+}
