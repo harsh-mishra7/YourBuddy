@@ -1,5 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/user";
+import { USER_STORAGE_QUOTA_BYTES, storageUsed } from "@/lib/quota";
+
+/**
+ * Every query in this file resolves the current user first and filters on it.
+ *
+ * That is not a convention to remember — it is the only thing separating one
+ * account's shelves from another's, so a query added here without a `userId`
+ * in its `where` is a data leak, not a bug.
+ */
 
 export type SortDir = "desc" | "asc";
 
@@ -116,3 +125,44 @@ export async function getTracker(id: string) {
 
 export type TrackerWithLogs = NonNullable<Awaited<ReturnType<typeof getTracker>>>;
 export type TrackerSummary = Awaited<ReturnType<typeof getTrackers>>[number];
+
+// ============================================================
+// Account
+// ============================================================
+
+/** Live sessions, newest activity first — the "where am I signed in" list. */
+export async function getUserSessions() {
+  const userId = await getCurrentUserId();
+  return prisma.session.findMany({
+    where: { userId, expiresAt: { gt: new Date() } },
+    orderBy: { lastActiveAt: "desc" },
+    select: {
+      id: true,
+      tokenHash: true,
+      userAgent: true,
+      createdAt: true,
+      lastActiveAt: true,
+      expiresAt: true,
+    },
+  });
+}
+
+export async function getStorageSummary() {
+  const userId = await getCurrentUserId();
+  const used = await storageUsed(userId);
+  return {
+    used,
+    quota: USER_STORAGE_QUOTA_BYTES,
+    unlimited: !Number.isFinite(USER_STORAGE_QUOTA_BYTES),
+  };
+}
+
+export async function getAccountTotals() {
+  const userId = await getCurrentUserId();
+  const [entries, trackers, attachments] = await Promise.all([
+    prisma.entry.count({ where: { userId } }),
+    prisma.tracker.count({ where: { userId } }),
+    prisma.attachment.count({ where: { userId } }),
+  ]);
+  return { entries, trackers, attachments };
+}

@@ -20,11 +20,14 @@ export function CheckInForm({
   logType,
   unit,
   cadence,
+  uploadsEnabled = false,
 }: {
   trackerId: string;
   logType: "BINARY" | "NUMBER" | "TEXT";
   unit: string | null;
   cadence: "DAILY" | "OCCASIONAL";
+  /** Resolved on the server — see `src/lib/uploads.ts` for why it's off by default. */
+  uploadsEnabled?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -137,7 +140,9 @@ export function CheckInForm({
         />
       </div>
 
-      <ImagePicker files={images} onChange={setImages} disabled={pending} />
+      {uploadsEnabled ? (
+        <ImagePicker files={images} onChange={setImages} disabled={pending} />
+      ) : null}
     </form>
   );
 }

@@ -31,6 +31,8 @@ Net effect: the tool fights the way thoughts actually arrive. You end up either 
 > **Answered:** built for you alone for now, with an eye on opening it up if it proves good.
 >
 > **One cheap precaution that keeps that door open:** even though v1 has a single user, the data model should carry a **user identity from day one.** Adding that column later means migrating every table and rewriting every query. Adding it now costs essentially nothing.
+>
+> **Revised 2026-08-24 — the door is now open.** The app is multi-user: anyone can sign up, and every account is entirely private. The precaution paid for itself exactly as predicted — no table changed shape and no query was rewritten. What it actually cost: a login screen, a `Session` table, a password column, and a route guard. *Consequence worth stating plainly: signup is open, so the deployment URL is the access control. There is no invite gate, and no email verification, which means the signup form will tell a stranger whether an address is already registered.*
 
 ## 4. The core idea
 
@@ -42,10 +44,11 @@ Two structural moves:
 
 | Entry type | What it is | Is it dated? |
 | --- | --- | --- |
-| **Journal entry** | Reflective writing about a day / period | Yes — date is meaningful here |
-| **Thought** | A stray idea, observation, one-liner | Timestamped, but date is incidental |
+| ~~**Journal entry**~~ / ~~**Thought**~~ | ~~Reflective writing about a day vs. a stray idea or one-liner~~ **Not separate types** — the shelf already says this (see below) | — |
 | ~~**For future me**~~ | **Not a separate type** — folded into reminders, since *any* entry can carry one (see below) | — |
 | **Tracker** | Something you log over time — a daily habit, or an occasional thing like gym performance | A series of check-ins, not an entry |
+
+> **This collapses a second concept — revised 2026-08-25.** "Journal entry vs. thought" was built as a stored type with a toggle, and it never did anything: nothing branched on it, so it was a badge colour. The reason is visible in the table it used to sit in — its two rows differed *only* in the "is it dated?" column, which is exactly what the shelves encode. So the type was a weaker second copy of the shelf, and one that could disagree with it: a "thought" filed under a date meant nothing. **The shelf is now the whole distinction.** Same shape of argument as "for future me" below — one less thing to decide while writing, one less thing to build.
 
 And **formats cut across all of them** — any entry can be text, voice, image, or video. Voice isn't a separate section; it's just another way to write a thought when you don't feel like typing. *(Video is deferred past v1 — see §5.)*
 
@@ -127,7 +130,7 @@ Any log, whatever its type, can *additionally* carry a note or media.
 ### Must have (v1) — *proposed, confirm or cut*
 
 - [ ] **Capture, fast.** Open app → write → save. No mandatory title, no mandatory date, no mandatory type.
-- [ ] **Entry types** — journal entry vs. free thought. ("For future me" is *not* a type — it's a reminder flag any entry can carry, §4.)
+- [x] ~~**Entry types** — journal entry vs. free thought.~~ **Cut 2026-08-25.** Built, shipped, and removed: it was a stored field with a toggle that nothing read. The dated/undated shelf already carries the distinction (§4). *Neither this nor "for future me" survived as a type — worth noticing that both times the answer was "that's not a type, it's a property of the entry".*
 - [ ] **Two-shelf browsing.** Dated and undated entries live in separate places (§4). The core differentiator.
 - [ ] **Remove-date action.** One gesture on any entry; moves it between shelves. Presumably reversible.
 - [ ] **Backdating.** A journal entry can be written for a past date you missed (§7).
@@ -178,7 +181,7 @@ Any log, whatever its type, can *additionally* carry a note or media.
 - [x] ~~**What triggers scheduled resurfacing?**~~ → **Answered:** an optional reminder you set while writing. Opt-in per entry, never automatic.
 - [x] ~~**How does a reminder reach you?**~~ → **Answered: in-app only.** No email, no push. *Consequence worth knowing: a reminder set for six months out fires whenever you next open the app after that date — it can't pull you back in. Reminders nudge you while you're already there. Fine for a personal tool; just not the same feature as a notification.*
 - [x] ~~**Privacy vs. AI**~~ → **Answered: AI wins.** Journal content, including transcribed voice, gets sent to a model provider to power analysis and ask-your-past. *Reading this as "the AI features are worth it, don't cripple them for strict local-only privacy" — say so if that's not what you meant.* Escape hatches if it ever matters more: run a local model, or scope what gets sent. Both are additive later; neither needs to shape v1.
-- [x] ~~**Just you, or a real product?**~~ → **Answered: just you for now,** possibly opening up later. See §3 for the one cheap precaution that keeps that door open.
+- [x] ~~**Just you, or a real product?**~~ → ~~**Answered: just you for now,**~~ **Revised 2026-08-24: opened up.** Multi-user with open signup and fully private accounts. See §3. *The one thing this closes off: any feature where two people see the same row — accountability buddies, shared trackers — is now a deliberate addition with a permission model, not a thing that falls out of the schema. That was the right trade for a private journal, and it is worth re-opening only if the buddy idea comes back.*
 - [x] ~~**Habit granularity**~~ → **Answered: binary by default,** with optional text/media per check-in. *(See the two follow-ups directly below — the occasional-tracker idea reopens part of this.)*
 - [x] ~~**Does binary apply to occasional trackers?**~~ → **Dissolved by the log-type choice.** Pick number or text for those; binary is no longer forced onto anything it doesn't suit.
 - [x] ~~**Should tracker logs have a number field?**~~ → **Answered: yes** — `number` is a first-class log type, not a bolt-on. Chartable data gets captured from day one, so there's nothing to backfill later.
@@ -214,7 +217,9 @@ If the AI retrospective ever tells you something about yourself you hadn't notic
 | 2026-08-24 | Past entries are context the AI can retrieve and surface on demand | Turns a static archive into something that answers questions |
 | 2026-08-24 | Voice notes are transcribed to text on save | Otherwise they're invisible to both search and AI analysis |
 | 2026-08-24 | Resurfacing = an opt-in reminder set while writing, never automatic | Predictable and user-controlled; also collapses "for future me" from an entry type into a flag on any entry |
-| 2026-08-24 | v1 is single-user (just you), possibly opened up later | Keeps scope small — but schema carries a user identity so scaling isn't a rewrite |
+| 2026-08-24 | ~~v1 is single-user (just you), possibly opened up later~~ **Revised: multi-user, open signup, fully private accounts** | Keeps scope small — but schema carries a user identity so scaling isn't a rewrite. **Revised:** the precaution paid off — opening up cost a login screen and a session table, and not one query changed shape. Accounts share nothing, so there is no permission model to get wrong |
+| 2026-08-25 | ~~Entry type: journal vs. thought~~ **Cut** — the shelf is the only distinction | Nothing ever branched on it, so it rendered as a badge colour. It also encoded the same axis as the dated/undated split, in a place that could contradict it |
+| 2026-08-24 | Auth is hand-rolled: `scrypt` passwords, sessions in Postgres | No dependency to track for a feature this central, and database sessions make sign-out *real* — a stateless token stays valid however many times you click the button |
 | 2026-08-24 | AI features take priority over strict local-only privacy | Content goes to a model provider; local models stay an additive option |
 | 2026-08-24 | Web only for v1; reminders in-app only | Removes notification infrastructure entirely — the biggest scope win so far |
 | 2026-08-24 | Habits are binary, with optional note/media per check-in | Daily logging stays one tap, while still capturing the "how it went" the AI needs |
@@ -233,7 +238,7 @@ If the AI retrospective ever tells you something about yourself you hadn't notic
 
 **Now unblocked** — §1–6 are settled and the privacy question is answered. Constraints that fall out of the decisions above:
 
-- **Single user**, but the schema carries a user identity from day one (§3)
+- ~~**Single user**~~ **Multi-user** — the user identity carried from day one is now cashed in; every query filters on it, and that filter is the only thing separating two accounts (§3)
 - **Two date fields per entry** — `created_at` vs. `entry_date`, since entries can be backdated (§7)
 - **Trackers carry a cadence** (daily / occasional) **and a log type** (binary / number / text) — logs are polymorphic, and the history view is driven by log type (§4)
 - **Web only** — but mobile-responsive from the start, so phone is a PWA install rather than a rewrite

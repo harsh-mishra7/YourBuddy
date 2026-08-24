@@ -11,24 +11,22 @@ import { ImagePicker } from "@/components/image-picker";
 import { VoiceRecorder, type RecordedAudio } from "@/components/voice-recorder";
 import { cn, todayKey } from "@/lib/utils";
 
-type Kind = "JOURNAL" | "THOUGHT";
-
 /**
  * Capture, fast: open → write → save. No mandatory title, no mandatory type,
  * and a date that's already filled in so there's nothing to decide (§5).
  */
 export function Composer({
-  defaultKind = "JOURNAL",
   defaultDated = true,
+  uploadsEnabled = false,
 }: {
-  defaultKind?: Kind;
   defaultDated?: boolean;
+  /** Resolved on the server — see `src/lib/uploads.ts` for why it's off by default. */
+  uploadsEnabled?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const [expanded, setExpanded] = useState(false);
-  const [kind, setKind] = useState<Kind>(defaultKind);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [dated, setDated] = useState(defaultDated);
@@ -48,7 +46,6 @@ export function Composer({
     setShowReminder(false);
     setDated(defaultDated);
     setEntryDate(todayKey());
-    setKind(defaultKind);
     setExpanded(false);
   }
 
@@ -59,7 +56,6 @@ export function Composer({
     }
 
     const fd = new FormData();
-    fd.set("kind", kind);
     fd.set("title", title);
     fd.set("body", body);
     fd.set("entryDate", dated ? entryDate : "");
@@ -124,28 +120,9 @@ export function Composer({
       {expanded ? (
         <>
           <div className="flex flex-col gap-3 border-t border-border px-3 py-3 sm:px-4">
-            {/* Type + date live together: they're the two things that decide
-                which shelf this lands on. */}
+            {/* The date is the only thing that decides which shelf this lands
+                on: a date means dated, no date means undated. */}
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-lg border border-border p-0.5">
-                {(["JOURNAL", "THOUGHT"] as const).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setKind(k)}
-                    disabled={pending}
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
-                      kind === k
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {k.toLowerCase()}
-                  </button>
-                ))}
-              </div>
-
               {dated ? (
                 <div className="flex items-center gap-1.5">
                   <Input
@@ -213,18 +190,20 @@ export function Composer({
               </div>
             ) : null}
 
-            <div className="flex flex-wrap items-start gap-3">
-              <ImagePicker
-                files={images}
-                onChange={setImages}
-                disabled={pending}
-              />
-              <VoiceRecorder
-                value={audio}
-                onChange={setAudio}
-                disabled={pending}
-              />
-            </div>
+            {uploadsEnabled ? (
+              <div className="flex flex-wrap items-start gap-3">
+                <ImagePicker
+                  files={images}
+                  onChange={setImages}
+                  disabled={pending}
+                />
+                <VoiceRecorder
+                  value={audio}
+                  onChange={setAudio}
+                  disabled={pending}
+                />
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2.5 sm:px-4">

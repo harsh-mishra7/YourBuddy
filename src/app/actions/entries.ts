@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/user";
 import { storage } from "@/lib/storage";
+import { checkStorageQuota, incomingUploadBytes } from "@/lib/quota";
+import { UPLOADS_ENABLED, UPLOADS_DISABLED_MESSAGE } from "@/lib/uploads";
 import { transcribe } from "@/lib/transcription";
 import { fromDateKey } from "@/lib/utils";
 import {
@@ -33,7 +35,10 @@ async function saveAttachments(
     if (!ACCEPTED_IMAGE_TYPES.includes(image.type)) continue;
     if (image.size > MAX_IMAGE_BYTES) continue;
 
-    const stored = await storage.put(image, "images");
+    // Keyed under the owner. Ownership is enforced by the attachment lookup,
+    // not by the path — but a per-user prefix means a stray key can't be
+    // walked into someone else's folder, and deleting an account is a subtree.
+    const stored = await storage.put(image, `u/${userId}/images`);
     await prisma.attachment.create({
       data: {
         userId,
@@ -55,7 +60,7 @@ async function saveAttachments(
   }
 
   const durationRaw = Number(formData.get("audioDuration"));
-  const stored = await storage.put(audio, "audio");
+  const stored = await storage.put(audio, `u/${userId}/audio`);
 
   // Transcribe on save. A missing provider parks it as PENDING rather than
   // failing the save — the audio is safe either way (§5).
@@ -90,8 +95,18 @@ async function saveAttachments(
 export async function createEntry(formData: FormData): Promise<ActionResult> {
   const userId = await getCurrentUserId();
 
+  // Both checks run before anything is written, so a refusal never leaves a
+  // saved entry with half its photos missing — or, worse, a saved entry the
+  // writer was told had failed.
+  const incoming = incomingUploadBytes(formData);
+  if (incoming > 0 && !UPLOADS_ENABLED) {
+    return { ok: false, error: UPLOADS_DISABLED_MESSAGE };
+  }
+
+  const overQuota = await checkStorageQuota(userId, incoming);
+  if (overQuota) return { ok: false, error: overQuota };
+
   const parsed = entryInput.safeParse({
-    kind: formData.get("kind") ?? "JOURNAL",
     title: (formData.get("title") as string) ?? "",
     body: (formData.get("body") as string) ?? "",
     entryDate: (formData.get("entryDate") as string) ?? "",
@@ -116,9 +131,6 @@ export async function createEntry(formData: FormData): Promise<ActionResult> {
   const data = parsed.success
     ? parsed.data
     : {
-        kind: ((formData.get("kind") as string) ?? "JOURNAL") as
-          | "JOURNAL"
-          | "THOUGHT",
         title: ((formData.get("title") as string) ?? "").trim(),
         body: ((formData.get("body") as string) ?? "").trim(),
         entryDate: ((formData.get("entryDate") as string) ?? "").trim(),
@@ -129,7 +141,6 @@ export async function createEntry(formData: FormData): Promise<ActionResult> {
     const entry = await prisma.entry.create({
       data: {
         userId,
-        kind: data.kind,
         title: data.title?.trim() || null,
         body: data.body ?? "",
         entryDate: data.entryDate ? fromDateKey(data.entryDate) : null,
@@ -175,9 +186,14 @@ export async function updateEntry(
   });
   if (!existing) return { ok: false, error: "Entry not found" };
 
-  const kind = ((formData.get("kind") as string) || existing.kind) as
-    | "JOURNAL"
-    | "THOUGHT";
+  const incoming = incomingUploadBytes(formData);
+  if (incoming > 0 && !UPLOADS_ENABLED) {
+    return { ok: false, error: UPLOADS_DISABLED_MESSAGE };
+  }
+
+  const overQuota = await checkStorageQuota(userId, incoming);
+  if (overQuota) return { ok: false, error: overQuota };
+
   const title = ((formData.get("title") as string) ?? "").trim();
   const body = ((formData.get("body") as string) ?? "").trim();
   const entryDate = ((formData.get("entryDate") as string) ?? "").trim();
@@ -186,7 +202,6 @@ export async function updateEntry(
     await prisma.entry.update({
       where: { id: entryId },
       data: {
-        kind,
         title: title || null,
         body,
         entryDate: entryDate ? fromDateKey(entryDate) : null,

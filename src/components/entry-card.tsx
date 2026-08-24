@@ -4,7 +4,6 @@ import { Bell, Mic, ImageIcon } from "lucide-react";
 import { EntryActions } from "@/components/entry-actions";
 import type { EntryWithRelations } from "@/lib/queries";
 import {
-  cn,
   excerpt,
   formatDateOnly,
   formatLocalDate,
@@ -22,17 +21,6 @@ export function EntryCard({ entry }: { entry: EntryWithRelations }) {
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span
-              className={cn(
-                "rounded px-1.5 py-0.5 text-[11px] font-medium capitalize",
-                entry.kind === "JOURNAL"
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              {entry.kind.toLowerCase()}
-            </span>
-
             <span>
               {entry.entryDate
                 ? formatDateOnly(entry.entryDate)

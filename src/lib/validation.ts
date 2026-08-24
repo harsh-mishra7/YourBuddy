@@ -12,9 +12,79 @@ export const ACCEPTED_IMAGE_TYPES = [
   "image/webp",
 ];
 
+// --- Accounts ---------------------------------------------------------------
+
+// Length beats composition rules: forcing a symbol into an eight-character
+// password buys less than four more characters does, and pushes people toward
+// the same handful of predictable substitutions.
+export const MIN_PASSWORD_LENGTH = 10;
+
+/**
+ * Emails are stored lower-cased and trimmed, always.
+ *
+ * Skip this and `Harsh@x.com` and `harsh@x.com` become two accounts holding
+ * two halves of one person's journal — with no way to merge them back.
+ */
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+const passwordField = z
+  .string()
+  .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters.`)
+  .max(200, "That password is too long.");
+
+export const signUpInput = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "What should we call you?")
+    .max(80, "That name is too long."),
+  email: z
+    .email({ error: "Enter a valid email address." })
+    .max(254, "That email is too long."),
+  password: passwordField,
+});
+
+export const signInInput = z.object({
+  email: z.email({ error: "Enter a valid email address." }).max(254),
+  password: z.string().min(1, "Enter your password."),
+});
+
+export const changePasswordInput = z.object({
+  currentPassword: z.string().min(1, "Enter your current password."),
+  newPassword: passwordField,
+});
+
+/** Shape returned to `useActionState` by every auth form action. */
+export type AuthState =
+  | {
+      error?: string;
+      fieldErrors?: Record<string, string[]>;
+      ok?: boolean;
+      message?: string;
+    }
+  | undefined;
+
+/**
+ * Only ever redirect to a path on this site.
+ *
+ * `?next=` comes from the URL, so without this check a crafted link could send
+ * someone through a real login straight onto an attacker's page — with the
+ * trust of having just typed their password.
+ */
+export function safeNextPath(value: string | undefined | null): string {
+  if (!value) return "/";
+  // "//host" and "/\host" are protocol-relative — they leave the site.
+  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
+    return "/";
+  }
+  if (value.startsWith("/login") || value.startsWith("/signup")) return "/";
+  return value;
+}
+
 export const entryInput = z
   .object({
-    kind: z.enum(["JOURNAL", "THOUGHT"]),
     title: z.string().trim().max(200).optional(),
     body: z.string().max(50_000).default(""),
     // "" means the entry has no date — it lives on the undated shelf.

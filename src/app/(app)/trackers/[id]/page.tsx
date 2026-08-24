@@ -6,6 +6,7 @@ import { TrackerHistory, type HistoryLog } from "@/components/tracker-history";
 import { TrackerSettings } from "@/components/tracker-settings";
 import { getTracker } from "@/lib/queries";
 import { mediaUrlFor, toDateKey } from "@/lib/entry-display";
+import { UPLOADS_ENABLED } from "@/lib/uploads";
 
 export default async function TrackerDetailPage({
   params,
@@ -78,6 +79,7 @@ export default async function TrackerDetailPage({
         logType={tracker.logType}
         unit={tracker.unit}
         cadence={tracker.cadence}
+        uploadsEnabled={UPLOADS_ENABLED}
       />
 
       <TrackerHistory

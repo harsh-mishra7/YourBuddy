@@ -2,24 +2,37 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ListTree, Target } from "lucide-react";
+import { CalendarDays, ListTree, Settings, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/", label: "Dated", icon: CalendarDays, key: "dated" as const },
   { href: "/undated", label: "Undated", icon: ListTree, key: "undated" as const },
   { href: "/trackers", label: "Trackers", icon: Target, key: null },
+  { href: "/settings", label: "You", icon: Settings, key: null },
 ];
+
+/** First letter of the name, falling back to the email. */
+function initialOf(user: { name: string | null; email: string }) {
+  return (user.name?.trim() || user.email).charAt(0).toUpperCase();
+}
 
 export function SiteNav({
   counts,
+  user,
 }: {
   counts: { dated: number; undated: number };
+  user: { name: string | null; email: string };
 }) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  // The account tab gets an avatar instead of an icon — with more than one
+  // person on the app, "which account am I in" should be answerable at a
+  // glance rather than by opening a menu.
+  const tabs = TABS.filter((t) => t.href !== "/settings");
 
   return (
     <>
@@ -33,7 +46,7 @@ export function SiteNav({
             Your<span className="text-primary">Buddy</span>
           </Link>
 
-          {TABS.map(({ href, label, icon: Icon, key }) => (
+          {tabs.map(({ href, label, icon: Icon, key }) => (
             <Link
               key={href}
               href={href}
@@ -53,18 +66,43 @@ export function SiteNav({
               ) : null}
             </Link>
           ))}
+
+          <Link
+            href="/settings"
+            title={user.email}
+            className={cn(
+              "ml-auto flex items-center gap-2 rounded-lg py-1 pl-1 pr-2.5 text-sm font-medium transition-colors",
+              isActive("/settings")
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+            )}
+          >
+            <span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {initialOf(user)}
+            </span>
+            <span className="max-w-32 truncate">
+              {user.name?.trim() || user.email}
+            </span>
+          </Link>
         </div>
       </header>
 
       {/* Mobile: the app is a phone-first capture tool, so navigation sits
           under the thumb rather than at the top of the screen. */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-md sm:hidden">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/85 px-4 py-3 backdrop-blur-md sm:hidden">
         <Link href="/" className="text-base font-semibold tracking-tight">
           Your<span className="text-primary">Buddy</span>
         </Link>
+        <Link
+          href="/settings"
+          title={user.email}
+          className="flex size-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+        >
+          {initialOf(user)}
+        </Link>
       </header>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
         {TABS.map(({ href, label, icon: Icon, key }) => (
           <Link
             key={href}

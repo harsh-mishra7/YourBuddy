@@ -4,6 +4,7 @@ import { EntryCard } from "@/components/entry-card";
 import { ShelfControls } from "@/components/shelf-controls";
 import { EmptyState } from "@/components/ui/card";
 import { getDatedEntries, parseSort } from "@/lib/queries";
+import { UPLOADS_ENABLED } from "@/lib/uploads";
 import { monthLabel } from "@/lib/utils";
 
 export default async function DatedShelfPage({
@@ -26,7 +27,7 @@ export default async function DatedShelfPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <Composer defaultKind="JOURNAL" defaultDated />
+      <Composer defaultDated uploadsEnabled={UPLOADS_ENABLED} />
 
       <div className="flex flex-col gap-1">
         <div className="flex items-baseline justify-between gap-3">

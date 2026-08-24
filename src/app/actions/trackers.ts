@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/user";
 import { storage } from "@/lib/storage";
+import { checkStorageQuota, incomingUploadBytes } from "@/lib/quota";
+import { UPLOADS_ENABLED, UPLOADS_DISABLED_MESSAGE } from "@/lib/uploads";
 import { fromDateKey } from "@/lib/utils";
 import {
   ACCEPTED_IMAGE_TYPES,
@@ -153,6 +155,16 @@ export async function logCheckIn(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: "Invalid date" };
   }
 
+  // Before the log row is written — this action has no try/catch around the
+  // image loop, so a storage failure here used to surface as a raw 500.
+  const incoming = incomingUploadBytes(formData);
+  if (incoming > 0 && !UPLOADS_ENABLED) {
+    return { ok: false, error: UPLOADS_DISABLED_MESSAGE };
+  }
+
+  const overQuota = await checkStorageQuota(userId, incoming);
+  if (overQuota) return { ok: false, error: overQuota };
+
   const logDate = fromDateKey(logDateKey);
 
   let boolValue: boolean | null = null;
@@ -205,7 +217,7 @@ export async function logCheckIn(formData: FormData): Promise<ActionResult> {
     if (!ACCEPTED_IMAGE_TYPES.includes(image.type)) continue;
     if (image.size > MAX_IMAGE_BYTES) continue;
 
-    const stored = await storage.put(image, "images");
+    const stored = await storage.put(image, `u/${userId}/images`);
     await prisma.attachment.create({
       data: {
         userId,

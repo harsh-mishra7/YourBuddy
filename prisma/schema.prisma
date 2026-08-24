@@ -1,7 +1,11 @@
-// YourBuddy — v1 schema
+// YourBuddy — v2 schema (multi-user)
 //
 // Design notes that trace back to IDEA.md:
-//  * Every table carries a user identity even though v1 is single-user (§3).
+//  * Every table carries a user identity — the §3 precaution, now cashed in:
+//    opening the app up was a login screen, not a migration of every table.
+//  * Accounts are fully private. There is no row anywhere that two users can
+//    both reach, which is why every query filters on `userId` and there is no
+//    share/membership table to get wrong.
 //  * Entries have TWO dates: `createdAt` (when you wrote it) and `entryDate`
 //    (what day it is *about*). They are not interchangeable — the dated shelf
 //    orders by entryDate, the sort control sorts by createdAt (§7).
@@ -24,36 +28,67 @@ datasource db {
 // ============================================================
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id String @id @default(cuid())
+  // Always stored lower-cased and trimmed. Without that, `A@x.com` and
+  // `a@x.com` become two accounts holding two halves of one person's journal.
+  email String @unique
+  name  String?
 
+  // Nullable on purpose. Accounts created before password auth existed — and
+  // any created by a script — have no password and cannot sign in until one is
+  // set (`npm run db:set-password`). A null hash is never treated as "matches".
+  passwordHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  sessions    Session[]
   entries     Entry[]
   trackers    Tracker[]
+  trackerLogs TrackerLog[]
   attachments Attachment[]
   reminders   Reminder[]
+}
+
+// ============================================================
+// Sessions — database-backed, so sign-out is real
+// ============================================================
+
+model Session {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // SHA-256 of the session token. The raw token exists only inside the user's
+  // cookie, so a leaked database dump holds nothing that can be replayed as a
+  // login. Hashed rather than encrypted because we only ever need to *look it
+  // up*, never to read it back.
+  tokenHash String @unique
+
+  expiresAt DateTime
+  // Extended as the session is used, which is what makes the window sliding.
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  // Shown on the settings page so "sign out everywhere" is an informed choice.
+  userAgent    String?
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // ============================================================
 // Entries
 // ============================================================
 
-enum EntryKind {
-  JOURNAL
-  THOUGHT
-}
-
 model Entry {
   id     String @id @default(cuid())
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  kind  EntryKind @default(JOURNAL)
   title String?
   // Always text. Voice transcripts are appended here so that *everything*
   // exists as text and is reachable by search (§4).
-  body  String    @default("")
+  body  String @default("")
 
   // When it was written. Never changes.
   createdAt DateTime @default(now())
@@ -173,8 +208,14 @@ model Tracker {
 }
 
 model TrackerLog {
-  id     String @id @default(cuid())
+  id String @id @default(cuid())
+
+  // A real foreign key, not just a column. Check-ins reached the user only
+  // through their tracker before; with more than one account on the box, the
+  // ownership column that every query filters on should be one the database
+  // enforces too.
   userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   trackerId String
   tracker   Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)

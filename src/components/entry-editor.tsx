@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { ImagePicker } from "@/components/image-picker";
 import { VoiceRecorder, type RecordedAudio } from "@/components/voice-recorder";
-import { cn, formatBytes, formatDuration, todayKey } from "@/lib/entry-display";
+import { formatBytes, formatDuration, todayKey } from "@/lib/entry-display";
 
 export interface EditorAttachment {
   id: string;
@@ -39,7 +39,6 @@ export interface EditorAttachment {
 
 export interface EditorEntry {
   id: string;
-  kind: "JOURNAL" | "THOUGHT";
   title: string;
   body: string;
   entryDateKey: string;
@@ -57,11 +56,17 @@ function toLocalInputValue(iso: string): string {
   )}:${pad(d.getMinutes())}`;
 }
 
-export function EntryEditor({ entry }: { entry: EditorEntry }) {
+export function EntryEditor({
+  entry,
+  uploadsEnabled = false,
+}: {
+  entry: EditorEntry;
+  /** Resolved on the server — see `src/lib/uploads.ts` for why it's off by default. */
+  uploadsEnabled?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  const [kind, setKind] = useState(entry.kind);
   const [title, setTitle] = useState(entry.title);
   const [body, setBody] = useState(entry.body);
   const [entryDate, setEntryDate] = useState(entry.entryDateKey);
@@ -74,7 +79,6 @@ export function EntryEditor({ entry }: { entry: EditorEntry }) {
 
   const dated = entryDate !== "";
   const dirty =
-    kind !== entry.kind ||
     title !== entry.title ||
     body !== entry.body ||
     entryDate !== entry.entryDateKey ||
@@ -83,7 +87,6 @@ export function EntryEditor({ entry }: { entry: EditorEntry }) {
 
   function save() {
     const fd = new FormData();
-    fd.set("kind", kind);
     fd.set("title", title);
     fd.set("body", body);
     fd.set("entryDate", entryDate);
@@ -145,25 +148,6 @@ export function EntryEditor({ entry }: { entry: EditorEntry }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
-          <div className="inline-flex rounded-lg border border-border p-0.5">
-            {(["JOURNAL", "THOUGHT"] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKind(k)}
-                disabled={pending}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
-                  kind === k
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {k.toLowerCase()}
-              </button>
-            ))}
-          </div>
-
           {dated ? (
             <>
               <Input
@@ -339,15 +323,17 @@ export function EntryEditor({ entry }: { entry: EditorEntry }) {
       ) : null}
 
       {/* Add more */}
-      <section className="flex flex-wrap items-start gap-3 rounded-xl border border-dashed border-border p-4">
-        <ImagePicker files={images} onChange={setImages} disabled={pending} />
-        <VoiceRecorder value={audio} onChange={setAudio} disabled={pending} />
-        {images.length > 0 || audio ? (
-          <span className="w-full text-xs text-muted-foreground">
-            Press Save to attach.
-          </span>
-        ) : null}
-      </section>
+      {uploadsEnabled ? (
+        <section className="flex flex-wrap items-start gap-3 rounded-xl border border-dashed border-border p-4">
+          <ImagePicker files={images} onChange={setImages} disabled={pending} />
+          <VoiceRecorder value={audio} onChange={setAudio} disabled={pending} />
+          {images.length > 0 || audio ? (
+            <span className="w-full text-xs text-muted-foreground">
+              Press Save to attach.
+            </span>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

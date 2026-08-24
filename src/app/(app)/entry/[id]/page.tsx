@@ -5,6 +5,7 @@ import { EntryActions } from "@/components/entry-actions";
 import { EntryEditor, type EditorEntry } from "@/components/entry-editor";
 import { getEntry } from "@/lib/queries";
 import { formatTimestamp, mediaUrlFor, toDateKey } from "@/lib/entry-display";
+import { UPLOADS_ENABLED } from "@/lib/uploads";
 
 export default async function EntryPage({
   params,
@@ -19,7 +20,6 @@ export default async function EntryPage({
 
   const data: EditorEntry = {
     id: entry.id,
-    kind: entry.kind,
     title: entry.title ?? "",
     body: entry.body,
     entryDateKey: entry.entryDate ? toDateKey(entry.entryDate) : "",
@@ -66,7 +66,7 @@ export default async function EntryPage({
         </div>
       </div>
 
-      <EntryEditor entry={data} />
+      <EntryEditor entry={data} uploadsEnabled={UPLOADS_ENABLED} />
     </div>
   );
 }

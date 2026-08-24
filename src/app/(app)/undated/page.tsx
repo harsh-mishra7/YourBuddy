@@ -4,6 +4,7 @@ import { EntryCard } from "@/components/entry-card";
 import { ShelfControls } from "@/components/shelf-controls";
 import { EmptyState } from "@/components/ui/card";
 import { getUndatedEntries, parseSort } from "@/lib/queries";
+import { UPLOADS_ENABLED } from "@/lib/uploads";
 
 export default async function UndatedShelfPage({
   searchParams,
@@ -18,7 +19,7 @@ export default async function UndatedShelfPage({
     <div className="flex flex-col gap-5">
       {/* Capture here defaults to a thought with no date — you already said
           which shelf you meant by being on this page. */}
-      <Composer defaultKind="THOUGHT" defaultDated={false} />
+      <Composer defaultDated={false} uploadsEnabled={UPLOADS_ENABLED} />
 
       <div className="flex flex-col gap-1">
         <div className="flex items-baseline justify-between gap-3">
