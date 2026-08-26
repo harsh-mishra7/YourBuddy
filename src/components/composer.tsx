@@ -6,9 +6,11 @@ import { Bell, BellOff, CalendarOff, CalendarPlus, Loader2 } from "lucide-react"
 import { toast } from "sonner";
 import { createEntry } from "@/app/actions/entries";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/field";
+import { Input } from "@/components/ui/field";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ImagePicker } from "@/components/image-picker";
 import { VoiceRecorder, type RecordedAudio } from "@/components/voice-recorder";
+import { richTextToPlain } from "@/lib/rich-text";
 import { cn, todayKey } from "@/lib/utils";
 
 /**
@@ -50,14 +52,17 @@ export function Composer({
   }
 
   function submit() {
-    if (!body.trim() && !title.trim() && !audio && images.length === 0) {
+    // `body` is the formatted copy, so emptiness is a question about its text:
+    // an editor left alone can still hold a stray `<br>`.
+    const written = richTextToPlain(body).trim();
+    if (!written && !title.trim() && !audio && images.length === 0) {
       toast.error("Write something first.");
       return;
     }
 
     const fd = new FormData();
     fd.set("title", title);
-    fd.set("body", body);
+    fd.set("bodyRich", body);
     fd.set("entryDate", dated ? entryDate : "");
     fd.set("remindAt", remindAt);
     images.forEach((f) => fd.append("images", f));
@@ -100,14 +105,15 @@ export function Composer({
           />
         ) : null}
 
-        <Textarea
+        <RichTextEditor
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={setBody}
           onFocus={() => setExpanded(true)}
           placeholder="What's on your mind?"
-          rows={expanded ? 4 : 1}
           disabled={pending}
-          className="min-h-10 border-0 bg-transparent px-0 py-1.5 focus:border-0"
+          // The marks only take up room once you're actually writing.
+          showToolbar={expanded}
+          className={cn("py-1.5", expanded ? "min-h-24" : "min-h-6")}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
               e.preventDefault();

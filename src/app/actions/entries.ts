@@ -7,6 +7,12 @@ import { storage } from "@/lib/storage";
 import { checkStorageQuota, incomingUploadBytes } from "@/lib/quota";
 import { UPLOADS_ENABLED, UPLOADS_DISABLED_MESSAGE } from "@/lib/uploads";
 import { transcribe } from "@/lib/transcription";
+import {
+  hasFormatting,
+  plainToRichText,
+  richTextToPlain,
+  sanitizeRichText,
+} from "@/lib/rich-text";
 import { fromDateKey } from "@/lib/utils";
 import {
   ACCEPTED_IMAGE_TYPES,
@@ -19,6 +25,35 @@ import {
 
 function refreshAll() {
   revalidatePath("/", "layout");
+}
+
+/**
+ * The two copies of what was written, from one posted field.
+ *
+ * The editor sends the formatted copy; the plain one is *derived* here rather
+ * than accepted, so the two can never disagree about what the entry says —
+ * search reads `body`, and it always matches what the page shows. Sanitizing
+ * on the way in is what makes the rich copy safe to render later (§4).
+ *
+ * `bodyRich` is null unless a mark was actually used: an unformatted entry
+ * stores nothing extra, and reads back exactly as it did before formatting
+ * existed.
+ */
+function readEntryBody(formData: FormData): {
+  body: string;
+  bodyRich: string | null;
+} {
+  const posted = formData.get("bodyRich");
+  const html = sanitizeRichText(
+    typeof posted === "string"
+      ? posted
+      : // A plain `body` field still works — the composer is not the only
+        // thing that may ever post an entry.
+        plainToRichText((formData.get("body") as string) ?? ""),
+  );
+
+  const body = richTextToPlain(html).trim();
+  return { body, bodyRich: body && hasFormatting(html) ? html : null };
 }
 
 /** Shared by create and update: persist images + voice note onto an entry. */
@@ -106,9 +141,12 @@ export async function createEntry(formData: FormData): Promise<ActionResult> {
   const overQuota = await checkStorageQuota(userId, incoming);
   if (overQuota) return { ok: false, error: overQuota };
 
+  const { body, bodyRich } = readEntryBody(formData);
+
   const parsed = entryInput.safeParse({
     title: (formData.get("title") as string) ?? "",
-    body: (formData.get("body") as string) ?? "",
+    body,
+    bodyRich: bodyRich ?? "",
     entryDate: (formData.get("entryDate") as string) ?? "",
     remindAt: (formData.get("remindAt") as string) ?? "",
   });
@@ -132,7 +170,10 @@ export async function createEntry(formData: FormData): Promise<ActionResult> {
     ? parsed.data
     : {
         title: ((formData.get("title") as string) ?? "").trim(),
-        body: ((formData.get("body") as string) ?? "").trim(),
+        body,
+        // This branch is the photo- or voice-only entry, which by definition
+        // has nothing typed to have formatted.
+        bodyRich: "",
         entryDate: ((formData.get("entryDate") as string) ?? "").trim(),
         remindAt: ((formData.get("remindAt") as string) ?? "").trim(),
       };
@@ -143,6 +184,7 @@ export async function createEntry(formData: FormData): Promise<ActionResult> {
         userId,
         title: data.title?.trim() || null,
         body: data.body ?? "",
+        bodyRich: data.bodyRich || null,
         entryDate: data.entryDate ? fromDateKey(data.entryDate) : null,
       },
     });
@@ -195,7 +237,7 @@ export async function updateEntry(
   if (overQuota) return { ok: false, error: overQuota };
 
   const title = ((formData.get("title") as string) ?? "").trim();
-  const body = ((formData.get("body") as string) ?? "").trim();
+  const { body, bodyRich } = readEntryBody(formData);
   const entryDate = ((formData.get("entryDate") as string) ?? "").trim();
 
   try {
@@ -204,6 +246,7 @@ export async function updateEntry(
       data: {
         title: title || null,
         body,
+        bodyRich,
         entryDate: entryDate ? fromDateKey(entryDate) : null,
         // Keep the remembered date in step when a date is set explicitly.
         priorEntryDate: entryDate

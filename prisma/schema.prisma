@@ -89,6 +89,11 @@ model Entry {
   // Always text. Voice transcripts are appended here so that *everything*
   // exists as text and is reachable by search (§4).
   body  String @default("")
+  // The same words carrying their bold/italic/underline marks, as the small
+  // HTML subset in `src/lib/rich-text.ts`. NULL whenever nothing is formatted,
+  // which is most entries. `body` stays the copy search reads, so putting a
+  // mark on a sentence can never make it unfindable.
+  bodyRich String?
 
   // When it was written. Never changes.
   createdAt DateTime @default(now())

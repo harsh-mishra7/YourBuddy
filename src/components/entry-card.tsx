@@ -4,17 +4,19 @@ import { Bell, Mic, ImageIcon } from "lucide-react";
 import { EntryActions } from "@/components/entry-actions";
 import type { EntryWithRelations } from "@/lib/queries";
 import {
-  excerpt,
   formatDateOnly,
   formatLocalDate,
   formatTimestamp,
   mediaUrlFor,
 } from "@/lib/entry-display";
+import { plainToRichText, richExcerpt } from "@/lib/rich-text";
 
 export function EntryCard({ entry }: { entry: EntryWithRelations }) {
   const images = entry.attachments.filter((a) => a.kind === "IMAGE");
   const audio = entry.attachments.filter((a) => a.kind === "AUDIO");
-  const preview = excerpt(entry.body, 220);
+  // What you marked bold is bold here too — a preview that quietly flattened
+  // the entry would make formatting feel like it hadn't been saved.
+  const preview = richExcerpt(entry.bodyRich ?? plainToRichText(entry.body), 220);
 
   return (
     <article className="group relative rounded-xl border border-border bg-card p-4 transition-colors hover:border-ring/40">
@@ -52,9 +54,13 @@ export function EntryCard({ entry }: { entry: EntryWithRelations }) {
               </h3>
             ) : null}
             {preview ? (
-              <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-                {preview}
-              </p>
+              // Safe by construction: every character here has been through
+              // `richExcerpt`, which escapes text and emits only the three
+              // marks. See `src/lib/rich-text.ts`.
+              <p
+                className="line-clamp-3 text-sm leading-relaxed text-muted-foreground"
+                dangerouslySetInnerHTML={{ __html: preview }}
+              />
             ) : (
               <p className="text-sm italic text-muted-foreground/70">
                 No text — {audio.length ? "voice note" : "photo"} only

@@ -92,6 +92,31 @@ textarea {
   field-sizing: content;
 }
 
+/*
+  The writing surface. An empty contentEditable renders nothing at all — no
+  height, no placeholder — so the prompt is drawn over it, matching the box's
+  own padding so the first character lands exactly where the prompt sat.
+*/
+.rich-text {
+  position: relative;
+}
+
+.rich-text[data-empty]::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  color: var(--muted-foreground);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* At this line-height an underline otherwise crowds the descenders. */
+u {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: from-font;
+}
+
 :focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;

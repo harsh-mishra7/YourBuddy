@@ -20,7 +20,8 @@ import {
 } from "@/app/actions/entries";
 import { clearReminder, setReminder } from "@/app/actions/reminders";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/field";
+import { Input, Label } from "@/components/ui/field";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ImagePicker } from "@/components/image-picker";
 import { VoiceRecorder, type RecordedAudio } from "@/components/voice-recorder";
 import { formatBytes, formatDuration, todayKey } from "@/lib/entry-display";
@@ -40,7 +41,8 @@ export interface EditorAttachment {
 export interface EditorEntry {
   id: string;
   title: string;
-  body: string;
+  /** The formatted copy — see `src/lib/rich-text.ts`. Sanitized on the server. */
+  bodyHtml: string;
   entryDateKey: string;
   createdAtISO: string;
   attachments: EditorAttachment[];
@@ -68,7 +70,7 @@ export function EntryEditor({
   const [pending, startTransition] = useTransition();
 
   const [title, setTitle] = useState(entry.title);
-  const [body, setBody] = useState(entry.body);
+  const [body, setBody] = useState(entry.bodyHtml);
   const [entryDate, setEntryDate] = useState(entry.entryDateKey);
   const [images, setImages] = useState<File[]>([]);
   const [audio, setAudio] = useState<RecordedAudio | null>(null);
@@ -80,7 +82,7 @@ export function EntryEditor({
   const dated = entryDate !== "";
   const dirty =
     title !== entry.title ||
-    body !== entry.body ||
+    body !== entry.bodyHtml ||
     entryDate !== entry.entryDateKey ||
     images.length > 0 ||
     audio !== null;
@@ -88,7 +90,7 @@ export function EntryEditor({
   function save() {
     const fd = new FormData();
     fd.set("title", title);
-    fd.set("body", body);
+    fd.set("bodyRich", body);
     fd.set("entryDate", entryDate);
     images.forEach((f) => fd.append("images", f));
     if (audio) {
@@ -137,13 +139,13 @@ export function EntryEditor({
             className="border-0 bg-transparent px-0 text-lg font-medium"
           />
 
-          <Textarea
+          <RichTextEditor
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={setBody}
             placeholder="Write…"
-            rows={10}
             disabled={pending}
-            className="prose-entry min-h-48 border-0 bg-transparent px-0"
+            ariaLabel="Entry"
+            className="prose-entry min-h-48"
           />
         </div>
 

@@ -5,6 +5,7 @@ import { EntryActions } from "@/components/entry-actions";
 import { EntryEditor, type EditorEntry } from "@/components/entry-editor";
 import { getEntry } from "@/lib/queries";
 import { formatTimestamp, mediaUrlFor, toDateKey } from "@/lib/entry-display";
+import { plainToRichText, sanitizeRichText } from "@/lib/rich-text";
 import { UPLOADS_ENABLED } from "@/lib/uploads";
 
 export default async function EntryPage({
@@ -21,7 +22,11 @@ export default async function EntryPage({
   const data: EditorEntry = {
     id: entry.id,
     title: entry.title ?? "",
-    body: entry.body,
+    // Entries written before formatting existed — and voice notes, whose body
+    // is a transcript — have no rich copy, so their plain text becomes one.
+    // Re-sanitizing both routes means the editor starts from the same shape it
+    // will post back, and "unsaved changes" only lights up for real edits.
+    bodyHtml: sanitizeRichText(entry.bodyRich ?? plainToRichText(entry.body)),
     entryDateKey: entry.entryDate ? toDateKey(entry.entryDate) : "",
     createdAtISO: entry.createdAt.toISOString(),
     attachments: entry.attachments.map((a) => ({

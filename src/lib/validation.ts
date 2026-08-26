@@ -86,7 +86,10 @@ export function safeNextPath(value: string | undefined | null): string {
 export const entryInput = z
   .object({
     title: z.string().trim().max(200).optional(),
-    body: z.string().max(50_000).default(""),
+    body: z.string().max(50_000, "That entry is too long.").default(""),
+    // The formatted copy of the same words, so it carries markup on top of
+    // them — room for marks on every sentence, still bounded.
+    bodyRich: z.string().max(200_000, "That entry is too long.").default(""),
     // "" means the entry has no date — it lives on the undated shelf.
     entryDate: z
       .string()
