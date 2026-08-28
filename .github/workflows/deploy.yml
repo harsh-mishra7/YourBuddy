@@ -81,3 +81,45 @@ jobs:
           url="$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed to $url" >> "$GITHUB_STEP_SUMMARY"
+
+  # 4. Prove the thing that shipped actually answers.
+  smoke:
+    name: Smoke test
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET /api/health
+        env:
+          # The production alias, NOT needs.deploy.outputs.url. This project has
+          # Vercel Deployment Protection on, so the per-deployment URL answers
+          # 302 -> vercel.com/sso-api for an unauthenticated request. `vercel
+          # deploy --prod` aliases this domain to the deployment it just made,
+          # so hitting it still tests the build we shipped.
+          URL: https://yourbuddy-sigma.vercel.app
+          DEPLOYMENT_URL: ${{ needs.deploy.outputs.url }}
+        run: |
+          echo "deployment: $DEPLOYMENT_URL"
+          echo "smoking:    $URL/api/health"
+
+          # Retry: Vercel returns before every edge region has the deployment,
+          # and the first request can also pay a cold start.
+          code=000
+          for attempt in 1 2 3 4 5; do
+            code="$(curl --silent --output body.txt --write-out '%{http_code}' \
+                      --max-time 20 "$URL/api/health" || echo 000)"
+            [ "$code" = "200" ] && break
+            echo "attempt $attempt: HTTP $code — retrying in 5s"
+            sleep 5
+          done
+
+          echo "--- response ---"
+          cat body.txt || true
+          echo
+
+          # Check the status explicitly. --fail would let a 3xx through, which
+          # is exactly how a protected URL slips past a smoke test.
+          [ "$code" = "200" ] || { echo "::error::expected HTTP 200, got $code"; exit 1; }
+          grep -q '"ok":true' body.txt || { echo "::error::health check did not report ok"; exit 1; }
+
+          echo "Smoke test passed: \`$URL/api/health\` returned 200 and ok:true" >> "$GITHUB_STEP_SUMMARY"
