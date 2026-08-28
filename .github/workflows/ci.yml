@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel an in-flight run when you push again to the same branch. Saves
+# minutes and stops a stale red X from arriving after a green one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: this workflow only reads code. Do this in every workflow.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15          # a hung job otherwise burns 6 hours of minutes
+
+    env:
+      # src/lib/prisma.ts throws on import if DATABASE_URL is missing, and
+      # Next imports every route while building — so the build needs SOME
+      # value. It is never connected to: every route in this app is dynamic
+      # (`ƒ` in the build output), so nothing queries the database at build
+      # time. A placeholder is correct here, and safer than wiring the real
+      # database into CI.
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm             # caches ~/.npm keyed on package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  migrations:
+    name: Migrations apply cleanly
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # A sidecar container that lives as long as the job. GitHub starts it
+    # before your steps run and maps 5432 out to localhost.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: yourbuddy
+          POSTGRES_PASSWORD: yourbuddy
+          POSTGRES_DB: yourbuddy_ci
+        ports:
+          - 5432:5432
+        # Without a healthcheck your steps race the database's startup and
+        # fail intermittently — the classic flaky-CI bug.
+        options: >-
+          --health-cmd "pg_isready -U yourbuddy"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://yourbuddy:yourbuddy@localhost:5432/yourbuddy_ci
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: Apply every migration to an empty database
+        run: npx prisma migrate deploy
+
+      - name: All migrations recorded as applied
+        run: npx prisma migrate status
+
+      # Exit code 2 = the migrated database and schema.prisma disagree, i.e.
+      # someone edited schema.prisma without generating a migration.
+      #
+      # Prisma 7 renamed these flags: --from-url is now --from-config-datasource
+      # (which reads DATABASE_URL via prisma.config.ts) and --to-schema-datamodel
+      # is now --to-schema. The Prisma 6 spelling errors out.
+      - name: No drift between migrations and schema.prisma
+        run: |
+          npx prisma migrate diff \
+            --from-config-datasource \
+            --to-schema=prisma/schema.prisma \
+            --exit-code
