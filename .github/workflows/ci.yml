@@ -2,8 +2,11 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  # No `push: branches: [main]` here. deploy.yml triggers on push to main and
+  # calls this workflow as its first job, so keeping the push trigger would run
+  # CI twice per merge — and both runs would land in the same `ci-refs/heads/main`
+  # concurrency group below, where cancel-in-progress makes them fight.
+  workflow_call:        # lets other workflows run this one as a job
 
 # Cancel an in-flight run when you push again to the same branch. Saves
 # minutes and stops a stale red X from arriving after a green one.

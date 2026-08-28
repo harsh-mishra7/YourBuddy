@@ -1,0 +1,83 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:     # keep a manual trigger — invaluable for retries
+
+# Never let two production deploys overlap. Unlike CI, do NOT cancel a run in
+# progress: cancelling midway through `prisma migrate deploy` is how you get a
+# half-applied migration.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # 1. Reuse the exact CI you already trust. If it fails, nothing below runs.
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  # 2. Migrate the production database.
+  migrate:
+    name: Migrate production database
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Production        # ← unlocks the environment secrets (+ approval)
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: prisma migrate deploy
+        env:
+          # DIRECT connection: the migration engine needs advisory locks,
+          # which the pooled endpoint drops.
+          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+  # 3. Build and deploy to Vercel.
+  deploy:
+    name: Deploy to Vercel
+    needs: migrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Production
+      url: ${{ steps.deploy.outputs.url }}   # shows the live URL on the run page
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install the Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull production environment settings
+        # Downloads the project's build settings AND its env vars — this is how
+        # the real DATABASE_URL reaches `next build` without ever being copied
+        # into GitHub.
+        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Build
+        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Deploy the prebuilt output
+        id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url" >> "$GITHUB_STEP_SUMMARY"
