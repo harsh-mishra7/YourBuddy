@@ -86,7 +86,7 @@ jobs:
     # before your steps run and maps 5432 out to localhost.
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_USER: yourbuddy
           POSTGRES_PASSWORD: yourbuddy
