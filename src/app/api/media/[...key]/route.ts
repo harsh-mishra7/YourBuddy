@@ -58,7 +58,3 @@ export async function GET(
     return new NextResponse("File missing from storage", { status: 404 });
   }
 }
-
-
-
-// these changes are for test purposes only
