@@ -55,6 +55,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Before the build, so a broken unit test fails in seconds rather than
+      # after a full compile.
+      - name: Test
+        run: npm test
+
       # Turbopack writes its build cache to .next/cache (Next 16 defaults
       # turbopackFileSystemCacheForBuild to true). setup-node's `cache: npm`
       # only covers downloads, not compiler output — this is a separate cache.
